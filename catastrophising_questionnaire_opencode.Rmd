@@ -1,0 +1,644 @@
+---
+title: "Catastrophising Questionnaire open code"
+output: 
+  html_notebook:
+    theme: united
+    toc: yes
+---
+
+This code runs the analyses reported in the paper presenting a novel Catastrophising Questionnaire (Serfaty, Pike, Robinson). Before you run this code, please note the following:
+
+1) This code depends on libraries/functions written by other users. These are all listed in the chunk below. Some parts of the code will not run without installing these packages/sourcing these functions. 
+
+2) This code requires you to define a working directory, into which you should have already downloaded the data (from the 'Open code' folder in this OSF). This is done using the choose.dir() function, so will pop up automatically. 
+
+3) This code will save images (the figures from the paper) into your working directory. If you do not want to do this, please enter 0 into the pop-up box. 
+
+
+Load libraries that this depends on
+```{r}
+library('dplyr')
+library('ggplot2')
+library('lubridate')
+library('psych')
+library('corrr')
+library('cowplot')
+library('car')
+library('reshape2')
+library('pheatmap')
+library('afex')
+library('irr')
+library('svDialogs')
+source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R")
+```
+
+Set a working directory and define whether you want to save images
+
+```{r}
+workingdir=choose.dir()
+save_images <- as.integer(dlgInput('Do you want to save images? 1=yes, 0=no: ', Sys.info()['0'])$res)
+```
+
+
+# Experiment 1 #
+
+Load in the data
+
+```{r}
+data1<-read.csv(paste0(workingdir,'/experiment1.csv'))
+```
+
+Check how long the total experiment and questionnaire took
+```{R}
+cat_time_taken<-mean(data1$cat_questionnaire_time)
+seconds_to_period(cat_time_taken/1000)
+
+full_time_taken<-mean(data1$total_time)
+seconds_to_period(full_time_taken)
+
+data1_items<-data1[,c('X1','X2','X3','X4','X5','X6','X7','X8','X9','X10','X11','X12','X13','X14','X15','X16','X17','X18','X19','X20','X21','X22','X23','X24','X25','X26','X27','X28','X29','X30','X31')]
+
+```
+
+Do alpha, omega and inter-item and item-total correlations
+
+```{r}
+#alpha
+psych::alpha(x=data1_items)
+
+#omega
+psych::omega(data1_items)
+
+#inter-item correlation
+data_correlation1 <- data1_items %>% corrr::correlate() 
+data_correlation1 <- data_correlation1 %>% dplyr::select(-rowname) %>% colMeans(na.rm = TRUE)
+data_correlation1
+mean(data_correlation1)
+
+data.frame(data_correlation1) %>% 
+  ggplot2::ggplot(aes(x = data_correlation1)) +
+  geom_histogram(bins = 10, alpha = .5) +
+  geom_vline(xintercept = mean(data_correlation1), color = "red") +
+  xlab("Mean inter-item correlation") +
+  theme_bw()
+
+#item-total correlation
+data1_items$score<-rowSums(data1_items)
+total_correlation1 <- data1_items %>% corrr::correlate() %>% focus(score)
+mean(total_correlation1$score)
+```
+
+Run an EFA and obtain the parameters recorded
+
+```{r}
+data1_items<- data1_items %>% dplyr::select(-'score')
+
+psych::KMO(data1_items)
+temp<-round(cor(data1_items),2)
+cortest.bartlett(temp,n=nrow(data1_items))
+
+
+parallel <- fa.parallel(data1_items, fm = 'minres', fa = 'fa')
+
+threefactor <- fa(data1_items,nfactors = 3,rotate = "oblimin",fm="minres")
+print(threefactor)
+```
+
+# Experiment 2#
+
+```{r}
+data2<-read.csv(paste0(workingdir,'/experiment2.csv'))
+```
+
+Check time taken
+```{r}
+cat_time_taken<-mean(data2$cat_questionnaire_time)
+seconds_to_period(cat_time_taken/1000)
+
+full_time_taken<-mean(data2$total_time)
+seconds_to_period(full_time_taken)
+
+
+data2_items<-data2[,c('X1','X2','X3','X4','X5','X6','X7','X8','X9','X10','X11','X12','X13','X14','X15','X16','X17','X18','X19','X20','X21','X22','X23','X24','X25')]
+
+```
+
+Do alpha, omega and inter-item and item-total correlations
+
+```{r}
+#alpha
+psych::alpha(x=data2_items)
+
+#omega
+psych::omega(data2_items)
+
+#inter-item correlation
+data_correlation4 <- data2_items %>% corrr::correlate() 
+data_correlation4 <- data_correlation4 %>% dplyr::select(-rowname) %>% colMeans(na.rm = TRUE)
+data_correlation4
+mean(data_correlation4)
+
+data.frame(data_correlation4) %>% 
+  ggplot2::ggplot(aes(x = data_correlation4)) +
+  geom_histogram(bins = 10, alpha = .5) +
+  geom_vline(xintercept = mean(data_correlation4), color = "red") +
+  xlab("Mean inter-item correlation") +
+  theme_bw()
+
+data2_items$score<-rowSums(data2_items)
+total_correlation3 <- data2_items %>% corrr::correlate() %>% focus(score)
+mean(total_correlation3$score)
+```
+
+Run an EFA and explore the best fit
+
+```{r}
+data2_items<- data2_items %>% dplyr::select(-'score')
+
+psych::KMO(data2_items)
+temp<-round(cor(data2_items),2)
+cortest.bartlett(temp,n=nrow(data2_items))
+
+parallel <- fa.parallel(data2_items, fm = 'minres', fa = 'fa')
+
+onefactor3 <- fa(data2_items,nfactors = 1,rotate = "oblimin",fm="minres")
+print(onefactor3)
+```
+
+Analyse data for canonical/shuffled separately
+
+```{r}
+data2_shuff<-data2[data2$version=='Shuffled_questionnaire',]
+data2_shuff<-data2_shuff[,c('X1','X2','X3','X4','X5','X6','X7','X8','X9','X10','X11','X12','X13','X14','X15','X16','X17','X18','X19','X20','X21','X22','X23','X24','X25')]
+data2_canon<-data2[data2$version=='Canonical_questionnaire',]
+data2_canon<-data2_canon[,c('X1','X2','X3','X4','X5','X6','X7','X8','X9','X10','X11','X12','X13','X14','X15','X16','X17','X18','X19','X20','X21','X22','X23','X24','X25')]
+
+psych::KMO(data2_canon)
+temp<-round(cor(data2_canon),2)
+cortest.bartlett(temp,n=nrow(data2_canon))
+
+psych::KMO(data2_shuff)
+temp<-round(cor(data2_shuff),2)
+cortest.bartlett(temp,n=nrow(data2_shuff))
+
+
+parallel <- fa.parallel(data2_canon, fm = 'minres', fa = 'fa')
+onefactor<-fa(data2_canon,nfactors = 1,rotate = "oblimin",fm="minres")
+twofactor<-fa(data2_canon,nfactors = 2,rotate = "oblimin",fm="minres")
+print(onefactor)
+print(twofactor)
+
+parallel <- fa.parallel(data2_shuff, fm = 'minres', fa = 'fa')
+onefactor<-fa(data2_shuff,nfactors = 1,rotate = "oblimin",fm="minres")
+print(onefactor)
+```
+
+t-tests for canonical/shuffled scores to check not different
+```{r}
+data2$score<-rowSums(select(data2,contains('X')))
+
+t.test(data2$score[data2$version=='Canonical_questionnaire'],data2$score[data2$version=='Shuffled_questionnaire'])
+
+sd(data2$score[data2$version=='Canonical_questionnaire'])
+sd(data2$score[data2$version=='Shuffled_questionnaire'])
+```
+
+# Experiment 3#
+
+Load in the data
+
+```{r}
+data3<-read.csv(paste0(workingdir,'/experiment3.csv'))
+```
+Check how long the total experiment and questionnaire took
+
+```{R}
+cat_time_taken<-mean(data3$cat_questionnaire_time)
+seconds_to_period(cat_time_taken/1000)
+
+short_time_taken<-mean(data3$short_questionnaire_time)
+seconds_to_period(short_time_taken/1000)
+
+full_time_taken<-mean(data3$total_time)
+seconds_to_period(full_time_taken)
+
+data3_items<-select(data3,contains('cata')) #only the questionnaire items
+```
+Psychometric analyses of Catastrophising Questionnaire
+
+```{r}
+#alpha
+psych::alpha(x=data3_items)
+
+#omega
+psych::omega(data3_items)
+
+#inter-item correlation
+data_correlation3 <- data3_items %>% corrr::correlate() 
+data_correlation3 <- data_correlation3 %>% dplyr::select(-rowname) %>% colMeans(na.rm = TRUE)
+data_correlation3
+mean(data_correlation3)
+
+data.frame(data_correlation3) %>% 
+  ggplot2::ggplot(aes(x = data_correlation3)) +
+  geom_histogram(bins = 10, alpha = .5) +
+  geom_vline(xintercept = mean(data_correlation3), color = "red") +
+  xlab("Mean inter-item correlation") +
+  theme_bw()
+
+#item-total correlation
+data3_items$score<-rowSums(data3_items)
+total_correlation3 <- data3_items %>% corrr::correlate() %>% focus(score)
+mean(total_correlation3$score)
+```
+
+
+Perform an EFA
+
+```{r}
+data3_items<- data3_items %>% dplyr::select(-'score') #remove the score column for now
+
+psych::KMO(data3_items)
+temp<-round(cor(data3_items),2)
+cortest.bartlett(temp,n=nrow(data3_items))
+
+parallel <- fa.parallel(data3_items, fm = 'minres', fa = 'fa')
+
+onefactor3 <- fa(data3_items,nfactors = 1,rotate = "oblimin",fm="minres")
+print(onefactor3)
+
+```
+
+Perform a CFA
+
+```{r}
+model<-' factor  =~ cata1 + cata2 + cata3 + cata4 + cata5 + cata6 + cata7 + cata8 + cata9 + cata10 + cata11 + cata12 + cata13 + cata14 + cata15 + cata16 + cata17 + cata18 + cata19 + cata20 + cata21 + cata22 + cata23 + cata24 '
+
+fit<-lavaan::cfa(model=model,data=data3_items)
+summary(fit, fit.measures=TRUE)
+```
+Check reliability of other questionnaires
+
+```{r}
+print('STAI')
+psych::omega(select(data3,contains('STAI')))
+
+print('PHQ')
+psych::omega(select(data3,contains('PHQ')))
+
+print('GAD')
+psych::omega(select(data3,contains('GAD')))
+
+print('RRS')
+psych::omega(select(data3,contains('RRS')))
+
+print('PSWQ')
+psych::omega(select(data3,contains('PSWQ')))
+
+print('TEPS-ANT')
+psych::omega(select(data3,contains('teps_ant')))
+
+print('TEPS-CON')
+psych::omega(select(data3,contains('teps_con')))
+
+print('CDS')
+psych::alpha(select(data3,contains('cds')))
+
+print('Short')
+psych::omega(select(data3,c(contains('short_X')))) #the extra bit is needed so don't get the time
+
+```
+
+
+Now, perform an FA on all questionnaires together (excluding the short version of the Catastrophising Questionnaire)
+
+```{r}
+data3_fa<-select(data3,-c(contains('short'),contains('time'),contains('id'),contains('medication'),contains('diagnosis')))
+
+data3_fa<-data3_fa[,order(colnames(data3_fa))] #put in alphabetical order to replicate graph exactly
+
+parallel <- fa.parallel(data3_fa, fm = 'minres', fa = 'fa')
+fit<-fa(data3_fa,nfactors=9)
+fit
+
+
+loadings<-data.frame(fit$loadings[])
+
+colnames(loadings)<-c("worry", "catastrophizing","rumination", "low mood and anxiety", "trait anxiety", "anticipatory anhedonia", "consummatory anhedonia", "other1", "other2")
+
+names<-c(rep('Catastrophising',24),rep('CDS-CAT',2),rep('GAD-7',7),rep('PHQ-9',8),rep('PSWQ',16),rep('RRS',22),c(rep('STAI-T',20),rep('TEPS-ANT',10),rep('TEPS-CON',8)))
+
+names_df<-data.frame(Questionnaire=names)
+rownames(names_df) <- rownames(loadings)
+
+ancol<- list(Questionnaire =c('Catastrophising' ="lavenderblush4", 'GAD-7' ="plum3",'PHQ-9' ="goldenrod1", 'PSWQ'="darkorange4", 'RRS'='firebrick3', 'STAI-T'='darkseagreen1', 'TEPS-ANT'="darksalmon",'TEPS-CON'="darkslateblue",'CDS-CAT' ="darkolivegreen3"))
+```
+
+Generate figure 1a (heatmap of factor analysis of all convergent/divergent measures)
+
+```{r}
+heatmapplot <- pheatmap(
+  mat               = loadings,
+  border_color      = NA,
+  color             = colorRampPalette(c("blue4", "white", "firebrick1"))(100),
+  cellwidth         = 70,
+  cellheight        = 3,
+  show_colnames     = TRUE,
+  show_rownames     = FALSE,
+  drop_levels       = TRUE,
+  fontsize          = 14,
+  main              = "Factors",
+  treeheight_row    = 0, 
+  treeheight_col    = 0,
+  cluster_rows      = FALSE,
+  annotation_row    = names_df,
+  annotation_colors = ancol,
+  angle_col         = 45,
+  gaps_col          = c(1,2),
+  width             = 5, 
+  height            = 5
+)
+
+if (save_images==1){
+  ggsave(heatmapplot,filename=paste0(workingdir,'/fa_heatmap.png'),width=12,height=9)
+}
+
+
+```
+
+Generate figure 1b (heatmap of correlations between all questionnaires)
+
+```{r}
+Cat<-rowSums(select(data3,contains('cata')))
+scores<-data.frame(Cat)
+scores$STAI<-rowSums(select(data3,contains('STAI')))
+scores$PHQ<-rowSums(select(data3,contains('PHQ')))
+scores$GAD<-rowSums(select(data3,contains('GAD')))
+scores$RRS<-rowSums(select(data3,contains('RRS')))
+scores$PSWQ<-rowSums(select(data3,contains('PSWQ')))
+scores$TEPS_ANT<-rowSums(select(data3,contains('teps_ant')))
+scores$TEPS_CON<-rowSums(select(data3,contains('teps_con')))
+scores$CDS<-rowSums(select(data3,contains('cds')))
+scores$short_cat<-rowSums(select(data3,c(contains('short_X')))) #the extra bit is needed so don't get the time
+
+cormat <- round(cor(scores),2)
+melted_cormat <- melt(cormat)
+melted_cormat$Var1<-factor(melted_cormat$Var1,ordered=TRUE,levels=c('Cat','short_cat','CDS','GAD','PHQ','PSWQ','RRS','STAI','TEPS_ANT','TEPS_CON'))
+melted_cormat$Var2<-factor(melted_cormat$Var2,ordered=TRUE,levels=c('Cat','short_cat','CDS','GAD','PHQ','PSWQ','RRS','STAI','TEPS_ANT','TEPS_CON'))
+
+corrplot<-ggplot(data = melted_cormat, aes(x=Var2, y=Var1, fill=value)) + 
+  geom_tile()+
+  scale_fill_gradient2(midpoint = 0, low = "navy", mid = "white", high = "red")+
+  geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) 
+
+if (save_images==1){
+  ggsave(corrplot,filename=paste0(workingdir,'/questionnaire_correlations.png'),width=12,height=9)
+}
+
+```
+
+Simple correlations between Catastrophising questionnaire and convergent/divergent validity measures, along with p values
+
+```{r}
+cor.test(scores$Cat,scores$short_cat)
+cor.test(scores$Cat,scores$CDS)
+cor.test(scores$Cat,scores$GAD)
+cor.test(scores$Cat,scores$PHQ)
+cor.test(scores$Cat,scores$PSWQ)
+cor.test(scores$Cat,scores$RRS)
+cor.test(scores$Cat,scores$STAI)
+cor.test(scores$Cat,scores$TEPS_ANT)
+cor.test(scores$Cat,scores$TEPS_CON)
+
+cor.test(scores$CDS,scores$STAI)
+cor.test(scores$CDS,scores$PSWQ)
+```
+
+
+Assess whether there is a difference if people have a psychiatric diagnosis or are on medication.
+
+```{r}
+data3_scores<-cbind(scores,select(data3,c(contains('medication'),contains('diagnosis'),contains('ID'))))
+
+t.test(data3_scores$GAD[data3_scores$diagnosis_anxdep=='no'],
+       data3_scores$GAD[data3_scores$diagnosis_anxdep=='yes'])
+
+t.test(data3_scores$PHQ[data3_scores$diagnosis_anxdep=='no'],
+       data3_scores$PHQ[data3_scores$diagnosis_anxdep=='yes'])
+
+
+t.test(data3_scores$Cat[data3_scores$diagnosis_general=='no'],
+       data3_scores$Cat[data3_scores$diagnosis_general=='yes'])
+
+t.test(data3_scores$Cat[data3_scores$diagnosis_anxdep=='no'],
+       data3_scores$Cat[data3_scores$diagnosis_anxdep=='yes'])
+
+aov_ez('ID','Cat',data3_scores,between=c('medication_general'))
+
+t.test(data3_scores$Cat[data3_scores$medication_general=='Yes I currently take medication'],data3_scores$Cat[data3_scores$medication_general=='Yes I took medication in the past'])
+
+t.test(data3_scores$Cat[data3_scores$medication_general=='Yes I took medication in the past'],data3_scores$Cat[data3_scores$medication_general=='No'])
+
+t.test(data3_scores$Cat[data3_scores$medication_general=='Yes I currently take medication'],data3_scores$Cat[data3_scores$medication_general=='No'])
+
+aov_ez('ID','Cat',data3_scores,between=c('medication_anxdep'))
+
+t.test(data3_scores$Cat[data3_scores$medication_anxdep=='Yes I currently take medication'],data3_scores$Cat[data3_scores$medication_anxdep=='Yes I took medication in the past'])
+
+t.test(data3_scores$Cat[data3_scores$medication_anxdep=='Yes I took medication in the past'],data3_scores$Cat[data3_scores$medication_anxdep=='No'])
+
+t.test(data3_scores$Cat[data3_scores$medication_anxdep=='Yes I currently take medication'],data3_scores$Cat[data3_scores$medication_anxdep=='No'])
+
+data3_scores%>%
+  group_by(diagnosis_general)%>%
+  summarize(mean=mean(Cat),sd=sd(Cat),n=length(Cat))
+
+data3_scores%>%
+  group_by(diagnosis_anxdep)%>%
+  summarize(mean=mean(Cat),sd=sd(Cat),n=length(Cat))
+
+data3_scores%>%
+  group_by(medication_general)%>%
+  summarize(mean=mean(Cat),sd=sd(Cat),n=length(Cat))
+
+data3_scores%>%
+  group_by(medication_anxdep)%>%
+  summarize(mean=mean(Cat),sd=sd(Cat),n=length(Cat))
+
+```
+
+Create figure 2 raincloud plots of difference in scores between diagnoses/medication
+```{r}
+
+data3_scores$medication_general<-recode(data3_scores$medication_general,"'No'= 1;'Yes I took medication in the past'=2;'Yes I currently take medication'= 3")
+data3_scores$medication_anxdep<-recode(data3_scores$medication_anxdep,"'No'= 1;'Yes I took medication in the past'=2;'Yes I currently take medication'= 3")
+
+data3_scores$diagnosis_general<-ifelse(data3_scores$diagnosis_general=='yes',2,1)
+data3_scores$diagnosis_anxdep<-ifelse(data3_scores$diagnosis_anxdep=='yes',2,1)
+
+data3_scores$diagnosis_general<-factor(data3_scores$diagnosis_general)
+data3_scores$diagnosis_anxdep<-factor(data3_scores$diagnosis_anxdep)
+data3_scores$medication_general<-factor(data3_scores$medication_general)
+data3_scores$medication_anxdep<-factor(data3_scores$medication_anxdep)
+
+
+a<-ggplot(data=data3_scores,aes(x=diagnosis_general,y=Cat,fill=diagnosis_general)) + 
+  geom_flat_violin(position = position_nudge(x = .25, y = 0),adjust =2, trim = FALSE)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  geom_boxplot(aes(x = as.numeric(diagnosis_general)+0.25, y = Cat),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+  labs(y='Catastrophising Score',x='History of any mental illness') + 
+  scale_fill_manual(values= c("#00AFBB", "#E7B800","#FC4E07"))+
+  scale_x_discrete(breaks=c(1,2),labels=c('No','Yes'))+
+  theme_classic()+
+  theme(legend.position='none')
+
+b<-ggplot(data=data3_scores,aes(x=diagnosis_anxdep,y=Cat,fill=diagnosis_anxdep)) + 
+  geom_flat_violin(position = position_nudge(x = .25, y = 0),adjust =2, trim = FALSE)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  geom_boxplot(aes(x = as.numeric(diagnosis_anxdep)+0.25, y = Cat),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+  labs(y='Catastrophising Score',x='History of anxiety or depression') + 
+  scale_fill_manual(values= c("#00AFBB", "#E7B800","#FC4E07"))+
+  scale_x_discrete(breaks=c(1,2),labels=c('No','Yes'))+
+  theme_classic()+
+  theme(legend.position='none')
+
+c<-ggplot(data=data3_scores,aes(x=medication_general,y=Cat,fill=medication_general)) + 
+  geom_flat_violin(position = position_nudge(x = .25, y = 0),adjust =2, trim = FALSE)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  geom_boxplot(aes(x = as.numeric(medication_general)+0.25, y = Cat),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+  labs(y='Catastrophising Score',x='History of any psychiatric medication use') + 
+  scale_fill_manual(values= c("#00AFBB", "#E7B800","#FC4E07"))+
+  scale_x_discrete(breaks=c(1,2,3),labels=c('No','Yes, formerly','Yes, currently'))+
+  theme_classic()+
+  theme(legend.position='none')
+
+
+d<-ggplot(data=data3_scores,aes(x=medication_anxdep,y=Cat,fill=medication_anxdep)) + 
+  geom_flat_violin(position = position_nudge(x = .25, y = 0),adjust =2, trim = FALSE)+
+  geom_point(position = position_jitter(width = .15), size = .25)+
+  geom_boxplot(aes(x = as.numeric(medication_anxdep)+0.25, y = Cat),outlier.shape = NA, alpha = 0.3, width = .1, colour = "BLACK") +
+  labs(y='Catastrophising Score',x='History of medication use for anxiety or depression') + 
+  scale_x_discrete(breaks=c(1,2,3),labels=c('No','Yes, formerly','Yes, currently'))+
+  scale_fill_manual(values= c("#00AFBB", "#E7B800","#FC4E07"))+
+  theme_classic()+
+  theme(legend.position='none')
+
+plot_grid(a,b,c,d,labels='AUTO')
+if (save_images==1){
+  ggsave(file=paste0(workingdir,'/raincloud_plots.png'),height=9,width=12)
+}
+
+```
+
+# Experiment 4#
+
+Load data
+
+```{r}
+
+data4<-read.csv(paste0(workingdir,'/experiment4.csv'))
+```
+
+Time taken
+
+```{r}
+cat_time_taken_t1<-mean(data4$cat_questionnaire_time_t1)
+seconds_to_period(cat_time_taken_t1/1000)
+
+cat_time_taken_t2<-mean(data4$cat_questionnaire_time_t2)
+seconds_to_period(cat_time_taken_t2/1000)
+
+full_time_taken<-mean(data4$total_time)
+seconds_to_period(full_time_taken)
+```
+
+
+
+Test-retest correlation and plot
+```{r}
+cor(data4$score_t1,data4$score_t2)
+cor.test(data4$score_t1,data4$score_t2)
+
+#function for getting the regression equation as text
+lm_eqn <- function(x,y){
+    m <- lm(y ~ x);
+    eq <- substitute(italic(y) == a + b %.% italic(x)*","~~italic(r)^2~"="~r2, 
+         list(a = format(unname(coef(m)[1]), digits = 2),
+              b = format(unname(coef(m)[2]), digits = 2),
+             r2 = format(summary(m)$r.squared, digits = 3)))
+    as.character(as.expression(eq));
+}
+
+
+ggplot(data=data4,aes(x=score_t1,y=score_t2))+
+  geom_point()+
+  labs(x='Score time 1',y='Score time 2')+
+  geom_smooth(method = "lm", se=FALSE, color="black", formula = y ~ x)+
+  geom_text(x = 35, y = 100, label = lm_eqn(data4$score_t1,data4$score_t2), parse = TRUE)
+
+
+```
+
+Calculate ICC (A,1) and (C,1) for absolute agreement and consistency (runs two-way mixed ICC analyses)
+
+```{r}
+icc_a1<-icc(cbind(data4$score_t1,data4$score_t2),model = "twoway",
+    type = "agreement",
+    unit = "single", 
+    r0 = 0,
+    conf.level = 0.95)
+
+icc_a1
+
+icc_c1<-icc(cbind(data4$score_t1,data4$score_t2),model = "twoway",
+    type = "consistency",
+    unit = "single", 
+    r0 = 0,
+    conf.level = 0.95)
+
+icc_c1
+```
+
+Alpha, omega, inter-item and item-total correlations
+
+```{r}
+data4_items<-select(data4,contains('t2'))%>%select(contains('X'))
+
+#alpha
+psych::alpha(x=data4_items)
+
+#omega
+psych::omega(data4_items)
+
+#inter-item correlation
+data_correlation4 <- data4_items %>% corrr::correlate() 
+data_correlation4 <- data_correlation4 %>% dplyr::select(-rowname) %>% colMeans(na.rm = TRUE)
+data_correlation4
+mean(data_correlation4)
+
+data.frame(data_correlation4) %>% 
+  ggplot2::ggplot(aes(x = data_correlation4)) +
+  geom_histogram(bins = 10, alpha = .5) +
+  geom_vline(xintercept = mean(data_correlation4), color = "red") +
+  xlab("Mean inter-item correlation") +
+  theme_bw()
+
+#item-total correlation
+data4_items$score<-rowSums(data4_items)
+total_correlation4 <- data4_items %>% corrr::correlate() %>% corrr::focus(score)
+mean(total_correlation4$score)
+```
+EFA
+
+```{r}
+data4_items<- data4_items %>% dplyr::select(-'score')
+
+psych::KMO(data4_items)
+temp<-round(cor(data4_items),2)
+cortest.bartlett(temp,n=nrow(data4_items))
+
+parallel <- fa.parallel(data4_items, fm = 'minres', fa = 'fa')
+
+onefactor4 <- fa(data4_items,nfactors = 1,rotate = "oblimin",fm="minres")
+print(onefactor4)
+```
